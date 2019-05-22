@@ -1,19 +1,20 @@
 #!/usr/bin/env runhaskell
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-import Distribution.Simple
-import Distribution.PackageDescription
-import Distribution.Version
+import           Distribution.PackageDescription
+import           Distribution.Simple
+import           Distribution.Version
 
-import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.Program
-import Distribution.Verbosity
+import           Distribution.Simple.LocalBuildInfo
+import           Distribution.Simple.Program
+import           Distribution.Verbosity
 
-import Data.Char (isSpace)
-import Data.List (dropWhile,reverse)
-import Data.String (fromString)
+import           Data.Char                          (isSpace)
+import           Data.List                          (dropWhile, reverse)
+import           Data.String                        (fromString)
 
-import Control.Monad
+import           Control.Monad
 
 main = defaultMainWithHooks simpleUserHooks {
   hookedPrograms = [pgconfigProgram],
@@ -21,11 +22,11 @@ main = defaultMainWithHooks simpleUserHooks {
   confHook = \pkg flags -> do
     lbi <- confHook simpleUserHooks pkg flags
     bi <- psqlBuildInfo lbi
-    
+
     return lbi {
       localPkgDescr = updatePackageDescription
                         (Just bi, [(fromString "runtests", bi)]) (localPkgDescr lbi)
-    } 
+    }
 }
 
 -- 'ConstOrId' is a @Cabal-1.16@ vs @Cabal-1.18@ compatibility hack,
@@ -45,9 +46,9 @@ instance FindProgramLocation (IO (Maybe FilePath)) (ProgramSearchPath -> IO (May
     constOrId x = liftM (fmap (\x -> (x, []))) . const x
 
 pgconfigProgram = (simpleProgram "pgconfig or pg_config") {
-    programFindLocation = \verbosity -> constOrId $ do
-      pgconfig  <- findProgramLocation verbosity "pgconfig"
-      pg_config <- findProgramLocation verbosity "pg_config"
+    programFindLocation = \verbosity path -> do
+      pgconfig  <- findProgramOnSearchPath verbosity path "pgconfig"
+      pg_config <- findProgramOnSearchPath verbosity path "pg_config"
       return (pgconfig `mplus` pg_config)
   }
 
@@ -55,7 +56,7 @@ psqlBuildInfo :: LocalBuildInfo -> IO BuildInfo
 psqlBuildInfo lbi = do
   (pgconfigProg, _) <- requireProgram verbosity
                          pgconfigProgram (withPrograms lbi)
-  let pgconfig = rawSystemProgramStdout verbosity pgconfigProg
+  let pgconfig = getProgramOutput verbosity pgconfigProg
 
   incDir <- pgconfig ["--includedir"]
   libDir <- pgconfig ["--libdir"]
